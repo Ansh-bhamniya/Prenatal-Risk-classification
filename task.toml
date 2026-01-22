@@ -1,0 +1,27 @@
+version = "1.0"
+
+[metadata]
+name = "prenatal_risk_classification"
+description = "Classify fetal health risk levels using cardiotocography (CTG) features with robust preprocessing and macro F1 optimization."
+author_name = "anonymous"
+author_email = "anonymous"
+difficulty = "medium"
+category = "Machine Learning"
+tags = ["data-science", "classification", "healthcare", "ctg", "sklearn"]
+expert_time_estimate_min = 45.0
+junior_time_estimate = 100.0
+task_type = "colab-bench"
+
+[verifier]
+timeout_sec = 600.0
+
+[agent]
+timeout_sec = 1200.0
+
+[environment]
+image = "python:3.11-slim"
+entrypoint = "/entrypoint.sh"
+build_timeout_sec = 600.0
+cpus = 2
+memory_mb = 4096
+storage_mb = 10240

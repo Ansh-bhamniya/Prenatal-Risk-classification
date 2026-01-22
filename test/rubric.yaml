@@ -1,0 +1,16 @@
+version: 1.0
+criteria:
+  - name: Model Accuracy
+    description: >
+      The model must achieve a macro F1-score of 0.92 or higher on the hidden test set.
+    verified_by: test_performance_macro_f1
+
+  - name: Robustness
+    description: >
+      The model must be able to handle input DataFrames containing extra "garbage" columns without raising an error or crashing.
+    verified_by: test_robustness_garbage_columns
+
+  - name: Visualization Verification
+    description: >
+      The model must correctly verify the class counts used for the bar graph plot of count vs predicted fetal_health using its own predicted data.
+    verified_by: test_visualization_plot_counts_verification
