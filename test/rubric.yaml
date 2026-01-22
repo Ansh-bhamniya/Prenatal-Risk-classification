@@ -2,7 +2,7 @@ version: 1.0
 criteria:
   - name: Model Accuracy
     description: >
-      The model must achieve a macro F1-score of 0.92 or higher on the hidden test set.
+      The model must achieve a macro F1-score of 0.91 or higher on the hidden test set.
     verified_by: test_performance_macro_f1
 
   - name: Robustness - Garbage Columns

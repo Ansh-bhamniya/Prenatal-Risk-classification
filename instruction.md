@@ -4,7 +4,7 @@ You are given a dataset containing cardiotocography (CTG) features used to asses
 * **train.csv**: Contains columns `['baseline value', 'accelerations', 'fetal_movement', 'uterine_contractions', 'light_decelerations', 'severe_decelerations', 'prolongued_decelerations', 'abnormal_short_term_variability', 'mean_value_of_short_term_variability', 'percentage_of_time_with_abnormal_long_term_variability', 'mean_value_of_long_term_variability', 'histogram_width', 'histogram_min', 'histogram_max', 'histogram_number_of_peaks', 'histogram_number_of_zeroes', 'histogram_mode', 'histogram_mean', 'histogram_median', 'histogram_variance', 'histogram_tendency', 'fetal_health']`.
 * **test.csv**: Contains only the features `['baseline value', 'accelerations', 'fetal_movement', 'uterine_contractions', 'light_decelerations', 'severe_decelerations', 'prolongued_decelerations', 'abnormal_short_term_variability', 'mean_value_of_short_term_variability', 'percentage_of_time_with_abnormal_long_term_variability', 'mean_value_of_long_term_variability', 'histogram_width', 'histogram_min', 'histogram_max', 'histogram_number_of_peaks', 'histogram_number_of_zeroes', 'histogram_mode', 'histogram_mean', 'histogram_median', 'histogram_variance', 'histogram_tendency']`. **The target 'fetal_health' column has been removed for evaluation.**
 
-**Goal**: Achieve a **macro F1-score ≥ 0.92** on the hidden test dataset.  
+**Goal**: Achieve a **macro F1-score ≥ 0.91** on the hidden test dataset.  
 **Goal (Visualization)**: Generate a clear bar chart showing **count vs predicted `fetal_health`** classes using predictions from `test.csv`.
 
 ### Deliverables

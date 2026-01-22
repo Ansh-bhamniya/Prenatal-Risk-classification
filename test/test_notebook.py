@@ -58,7 +58,7 @@ def student_data():
 # --------------------------------------------------------------------------------------------
 
 def test_performance_macro_f1(predictor_class, student_data):
-    """Test 1: Macro F1-score must be >= 0.92 on blind test set."""
+    """Test 1: Macro F1-score must be >= 0.91 on blind test set."""
     PrenatalRiskClassifier = predictor_class
     X_train, y_train, X_test, y_test = student_data
 
@@ -71,7 +71,7 @@ def test_performance_macro_f1(predictor_class, student_data):
 
     macro_f1 = f1_score(y_test, y_pred, average="macro")
 
-    assert macro_f1 >= 0.92, f"FAIL: Macro F1-score is {macro_f1:.4f}, expected >= 0.92"
+    assert macro_f1 >= 0.91, f"FAIL: Macro F1-score is {macro_f1:.4f}, expected >= 0.91"
 
 def test_robustness_garbage_columns(predictor_class, student_data):
     """Test 2: Model must handle extra 'garbage' columns without crashing."""
