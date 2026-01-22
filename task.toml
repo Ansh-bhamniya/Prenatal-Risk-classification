@@ -2,14 +2,14 @@ version = "1.0"
 
 [metadata]
 name = "prenatal_risk_classification"
-description = "Classify fetal health risk levels using cardiotocography (CTG) features with robust preprocessing and macro F1 optimization."
+description = "Classify fetal health risk levels using cardiotocography (CTG) features with feature engineering, hyperparameter optimization, cross-validation, and comprehensive evaluation metrics."
 author_name = "anonymous"
 author_email = "anonymous"
-difficulty = "medium"
+difficulty = "hard"
 category = "Machine Learning"
-tags = ["data-science", "classification", "healthcare", "ctg", "sklearn"]
-expert_time_estimate_min = 45.0
-junior_time_estimate = 100.0
+tags = ["data-science", "classification", "healthcare", "ctg", "sklearn", "feature-engineering", "hyperparameter-tuning", "cross-validation"]
+expert_time_estimate_min = 90.0
+junior_time_estimate = 180.0
 task_type = "colab-bench"
 
 [verifier]

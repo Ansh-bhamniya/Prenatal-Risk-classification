@@ -1,26 +1,7 @@
-#!/bin/bash
-# Test script for Prenatal Risk Classification Task
-# Location: /tests/test.sh
-
-set -e
-EXIT_CODE=0
-VERIFIER_DIR="/logs/verifier"
-mkdir -p $VERIFIER_DIR
-
-echo "=================================================="
-echo "STEP 0: Environment Prep"
-echo "=================================================="
-# Install dependencies required for testing
-pip install pytest==8.4.1 pytest-json-ctrf==0.3.5 litellm==1.80.9
-rm -rf /results/__pycache__
-rm -f $VERIFIER_DIR/reward.txt
-
-# --- CRITICAL FIX START: GENERATE GOLDEN SOLUTION IF MISSING ---
-# This ensures tests pass even if no agent has run yet (for debugging/verification purposes)
-if [ ! -f "/results/utils.py" ]; then
-    echo "Creating golden solution at /results/utils.py for verification..."
-    mkdir -p /results
-    cat <<'EOF' > /results/utils.py
+"""
+Enhanced PrenatalRiskClassifier Solution
+This file demonstrates the complete implementation meeting all new requirements.
+"""
 import pandas as pd
 import numpy as np
 from sklearn.pipeline import Pipeline
@@ -30,13 +11,14 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import GridSearchCV
 from sklearn.metrics import precision_score, recall_score, f1_score
 
+
 class PrenatalRiskClassifier:
     def __init__(self):
         """Initialize fetal health classification model with feature engineering, 
         hyperparameter optimization, and comprehensive evaluation capabilities."""
         self.target_name = "fetal_health"
 
-        # Expected feature columns for robustness
+        # Explicitly define expected features for robustness
         self.features = [
             'baseline value',
             'accelerations',
@@ -68,10 +50,11 @@ class PrenatalRiskClassifier:
         self.best_estimator_ = None
 
     def _engineer_features(self, X: pd.DataFrame) -> pd.DataFrame:
-        """Create engineered features from existing features."""
+        """Create engineered features from existing features.
+        Returns DataFrame with original + engineered features."""
         X_eng = X.copy()
         
-        # Feature 1: Deceleration ratio
+        # Feature 1: Deceleration ratio (total decelerations normalized)
         deceleration_cols = ['light_decelerations', 'severe_decelerations', 'prolongued_decelerations']
         if all(col in X_eng.columns for col in deceleration_cols):
             X_eng['total_decelerations'] = (
@@ -85,7 +68,7 @@ class PrenatalRiskClassifier:
             X_eng['total_decelerations'] = 0.0
             X_eng['deceleration_baseline_ratio'] = 0.0
         
-        # Feature 2: Variability ratio
+        # Feature 2: Variability ratio (short-term vs long-term variability)
         if 'mean_value_of_short_term_variability' in X_eng.columns and \
            'mean_value_of_long_term_variability' in X_eng.columns:
             long_term_safe = X_eng['mean_value_of_long_term_variability'].replace(0, np.nan)
@@ -95,7 +78,7 @@ class PrenatalRiskClassifier:
         else:
             X_eng['variability_ratio'] = 0.0
         
-        # Feature 3: Histogram spread
+        # Feature 3: Histogram spread (range normalized by mean)
         if all(col in X_eng.columns for col in ['histogram_min', 'histogram_max', 'histogram_mean']):
             histogram_range = X_eng['histogram_max'] - X_eng['histogram_min']
             mean_safe = X_eng['histogram_mean'].replace(0, np.nan)
@@ -127,7 +110,7 @@ class PrenatalRiskClassifier:
             if c not in Xc.columns:
                 Xc[c] = np.nan
 
-        # Preserve column order
+        # Preserve the correct column order
         Xc = Xc[self.features]
         
         # Apply feature engineering
@@ -195,9 +178,11 @@ class PrenatalRiskClassifier:
         if not hasattr(self, 'pipeline'):
             raise ValueError("Model must be fitted before getting feature importance")
         
+        # Get feature importance from the model
         model = self.pipeline.named_steps['model']
         importance = model.feature_importances_
         
+        # Create Series with feature names
         importance_series = pd.Series(
             importance,
             index=self.feature_names_out_
@@ -216,12 +201,15 @@ class PrenatalRiskClassifier:
         y_pred = self.predict(X)
         y_true = pd.Series(y).squeeze()
         
+        # Get unique classes
         classes = sorted(np.unique(np.concatenate([y_true.unique(), y_pred])))
         
+        # Calculate metrics per class
         precision = precision_score(y_true, y_pred, labels=classes, average=None, zero_division=0)
         recall = recall_score(y_true, y_pred, labels=classes, average=None, zero_division=0)
         f1 = f1_score(y_true, y_pred, labels=classes, average=None, zero_division=0)
         
+        # Create dictionary with results
         metrics = {
             'precision': dict(zip(classes, precision)),
             'recall': dict(zip(classes, recall)),
@@ -231,39 +219,6 @@ class PrenatalRiskClassifier:
         return metrics
 
     def get_plot_counts(self, X):
-        """Returns the exact counts used for the bar plot based on predictions."""
+        """Return the exact counts used for the bar plot based on predicted fetal_health."""
         y_pred = pd.Series(self.predict(X), name="fetal_health")
         return y_pred.value_counts().sort_index()
-EOF
-fi
-# --- CRITICAL FIX END ---
-
-echo "=================================================="
-echo "STEP 1: Variable & File Check"
-echo "=================================================="
-if [ ! -f "/results/utils.py" ]; then
-    echo "Critical Failure: /results/utils.py not found."
-    echo 0 > $VERIFIER_DIR/reward.txt
-    exit 0
-fi
-
-echo "=================================================="
-echo "STEP 2: Running unit tests"
-echo "=================================================="
-# Run the pytest suite and generate CTRF report
-pytest --ctrf $VERIFIER_DIR/ctrf.json /tests/test_notebook.py -rA -v || {
-    echo "⚠️ Pytest failed with exit code $?"
-    EXIT_CODE=1
-}
-
-echo "=================================================="
-echo "STEP 3: Final Scoring"
-echo "=================================================="
-if [ $EXIT_CODE -ne 0 ]; then
-    echo "Some tests failed"
-    echo 0 > $VERIFIER_DIR/reward.txt
-else
-    echo "All tests passed!"
-    echo 1 > $VERIFIER_DIR/reward.txt
-fi
-chmod 644 $VERIFIER_DIR/reward.txt

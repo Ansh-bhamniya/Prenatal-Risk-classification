@@ -5,10 +5,40 @@ criteria:
       The model must achieve a macro F1-score of 0.92 or higher on the hidden test set.
     verified_by: test_performance_macro_f1
 
-  - name: Robustness
+  - name: Robustness - Garbage Columns
     description: >
       The model must be able to handle input DataFrames containing extra "garbage" columns without raising an error or crashing.
     verified_by: test_robustness_garbage_columns
+
+  - name: Robustness - Missing Values
+    description: >
+      The model must handle missing values in input data gracefully during prediction.
+    verified_by: test_robustness_missing_values
+
+  - name: Feature Engineering
+    description: >
+      The model must create at least 2 new engineered features from existing features. The feature engineering must be consistent between training and prediction.
+    verified_by: test_feature_engineering
+
+  - name: Hyperparameter Optimization
+    description: >
+      The model must perform hyperparameter optimization using cross-validation during the fit() method and store the best parameters.
+    verified_by: test_hyperparameter_optimization
+
+  - name: Feature Importance
+    description: >
+      The model must provide a get_feature_importance() method that returns normalized importance scores sorted in descending order.
+    verified_by: test_feature_importance
+
+  - name: Prediction Probabilities
+    description: >
+      The model must provide a predict_proba() method that returns valid probability distributions for each class.
+    verified_by: test_predict_proba
+
+  - name: Per-Class Metrics
+    description: >
+      The model must provide an evaluate_per_class_metrics() method that returns precision, recall, and F1-score for each class.
+    verified_by: test_per_class_metrics
 
   - name: Visualization Verification
     description: >
