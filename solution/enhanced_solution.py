@@ -1,224 +1,251 @@
-"""
-Enhanced PrenatalRiskClassifier Solution
-This file demonstrates the complete implementation meeting all new requirements.
-"""
-import pandas as pd
-import numpy as np
-from sklearn.pipeline import Pipeline
-from sklearn.impute import SimpleImputer
-from sklearn.preprocessing import StandardScaler
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import GridSearchCV
-from sklearn.metrics import precision_score, recall_score, f1_score
-
-
-class PrenatalRiskClassifier:
-    def __init__(self):
-        """Initialize fetal health classification model with feature engineering, 
-        hyperparameter optimization, and comprehensive evaluation capabilities."""
-        self.target_name = "fetal_health"
-
-        # Explicitly define expected features for robustness
-        self.features = [
-            'baseline value',
-            'accelerations',
-            'fetal_movement',
-            'uterine_contractions',
-            'light_decelerations',
-            'severe_decelerations',
-            'prolongued_decelerations',
-            'abnormal_short_term_variability',
-            'mean_value_of_short_term_variability',
-            'percentage_of_time_with_abnormal_long_term_variability',
-            'mean_value_of_long_term_variability',
-            'histogram_width',
-            'histogram_min',
-            'histogram_max',
-            'histogram_number_of_peaks',
-            'histogram_number_of_zeroes',
-            'histogram_mode',
-            'histogram_mean',
-            'histogram_median',
-            'histogram_variance',
-            'histogram_tendency'
-        ]
-        
-        # Store best parameters and grid search results
-        self.best_params_ = None
-        self.best_score_ = None
-        self.cv_results_ = None
-        self.best_estimator_ = None
-
-    def _engineer_features(self, X: pd.DataFrame) -> pd.DataFrame:
-        """Create engineered features from existing features.
-        Returns DataFrame with original + engineered features."""
-        X_eng = X.copy()
-        
-        # Feature 1: Deceleration ratio (total decelerations normalized)
-        deceleration_cols = ['light_decelerations', 'severe_decelerations', 'prolongued_decelerations']
-        if all(col in X_eng.columns for col in deceleration_cols):
-            X_eng['total_decelerations'] = (
-                X_eng['light_decelerations'] + 
-                X_eng['severe_decelerations'] + 
-                X_eng['prolongued_decelerations']
-            )
-            baseline_safe = X_eng['baseline value'].replace(0, np.nan)
-            X_eng['deceleration_baseline_ratio'] = X_eng['total_decelerations'] / (baseline_safe + 1e-6)
-        else:
-            X_eng['total_decelerations'] = 0.0
-            X_eng['deceleration_baseline_ratio'] = 0.0
-        
-        # Feature 2: Variability ratio (short-term vs long-term variability)
-        if 'mean_value_of_short_term_variability' in X_eng.columns and \
-           'mean_value_of_long_term_variability' in X_eng.columns:
-            long_term_safe = X_eng['mean_value_of_long_term_variability'].replace(0, np.nan)
-            X_eng['variability_ratio'] = (
-                X_eng['mean_value_of_short_term_variability'] / (long_term_safe + 1e-6)
-            )
-        else:
-            X_eng['variability_ratio'] = 0.0
-        
-        # Feature 3: Histogram spread (range normalized by mean)
-        if all(col in X_eng.columns for col in ['histogram_min', 'histogram_max', 'histogram_mean']):
-            histogram_range = X_eng['histogram_max'] - X_eng['histogram_min']
-            mean_safe = X_eng['histogram_mean'].replace(0, np.nan)
-            X_eng['histogram_spread_ratio'] = histogram_range / (mean_safe + 1e-6)
-        else:
-            X_eng['histogram_spread_ratio'] = 0.0
-        
-        return X_eng
-
-    def _prepare_X(self, X: pd.DataFrame) -> pd.DataFrame:
-        """Select expected features, ignore extra columns, create missing columns, 
-        and apply feature engineering."""
-        Xc = X.copy()
-
-        # Convert string columns to numeric where possible (robustness)
-        for col in Xc.columns:
-            if Xc[col].dtype == 'object':
-                try:
-                    Xc[col] = pd.to_numeric(Xc[col], errors='coerce')
-                except:
-                    pass
-
-        # Ignore extra / garbage columns safely
-        keep_cols = [c for c in self.features if c in Xc.columns]
-        Xc = Xc[keep_cols].copy()
-
-        # Ensure all expected feature columns exist
-        for c in self.features:
-            if c not in Xc.columns:
-                Xc[c] = np.nan
-
-        # Preserve the correct column order
-        Xc = Xc[self.features]
-        
-        # Apply feature engineering
-        Xc = self._engineer_features(Xc)
-
-        return Xc
-
-    def fit(self, X, y):
-        """Fit the model with hyperparameter optimization using cross-validation."""
-        Xp = self._prepare_X(X)
-        y_series = pd.Series(y).squeeze()
-        
-        # Create base pipeline
-        base_pipeline = Pipeline(steps=[
-            ("imputer", SimpleImputer(strategy="median")),
-            ("scaler", StandardScaler()),
-            ("model", RandomForestClassifier(random_state=42, class_weight="balanced"))
-        ])
-        
-        # Define hyperparameter grid
-        param_grid = {
-            'model__n_estimators': [200, 300, 400],
-            'model__max_depth': [10, 15, 20, None],
-            'model__min_samples_split': [2, 5, 10],
-            'model__min_samples_leaf': [1, 2, 4]
-        }
-        
-        # Perform grid search with 3-fold cross-validation
-        grid_search = GridSearchCV(
-            base_pipeline,
-            param_grid,
-            cv=3,
-            scoring='f1_macro',
-            n_jobs=-1,
-            verbose=0
-        )
-        
-        grid_search.fit(Xp, y_series)
-        
-        # Store results
-        self.best_params_ = grid_search.best_params_
-        self.best_score_ = grid_search.best_score_
-        self.cv_results_ = grid_search.cv_results_
-        self.best_estimator_ = grid_search.best_estimator_
-        self.pipeline = grid_search.best_estimator_
-        
-        # Store feature names for feature importance
-        self.feature_names_out_ = list(Xp.columns)
-        self.n_features_out_ = len(self.feature_names_out_)
-        
-        return self
-
-    def predict(self, X):
-        """Predict fetal health classes."""
-        Xp = self._prepare_X(X)
-        return self.pipeline.predict(Xp)
-
-    def predict_proba(self, X):
-        """Return prediction probabilities for each class."""
-        Xp = self._prepare_X(X)
-        return self.pipeline.predict_proba(Xp)
-
-    def get_feature_importance(self):
-        """Return normalized feature importance scores sorted in descending order."""
-        if not hasattr(self, 'pipeline'):
-            raise ValueError("Model must be fitted before getting feature importance")
-        
-        # Get feature importance from the model
-        model = self.pipeline.named_steps['model']
-        importance = model.feature_importances_
-        
-        # Create Series with feature names
-        importance_series = pd.Series(
-            importance,
-            index=self.feature_names_out_
-        )
-        
-        # Normalize to sum to 1.0
-        importance_series = importance_series / importance_series.sum()
-        
-        # Sort in descending order
-        importance_series = importance_series.sort_values(ascending=False)
-        
-        return importance_series
-
-    def evaluate_per_class_metrics(self, X, y):
-        """Return precision, recall, and F1-score for each class."""
-        y_pred = self.predict(X)
-        y_true = pd.Series(y).squeeze()
-        
-        # Get unique classes
-        classes = sorted(np.unique(np.concatenate([y_true.unique(), y_pred])))
-        
-        # Calculate metrics per class
-        precision = precision_score(y_true, y_pred, labels=classes, average=None, zero_division=0)
-        recall = recall_score(y_true, y_pred, labels=classes, average=None, zero_division=0)
-        f1 = f1_score(y_true, y_pred, labels=classes, average=None, zero_division=0)
-        
-        # Create dictionary with results
-        metrics = {
-            'precision': dict(zip(classes, precision)),
-            'recall': dict(zip(classes, recall)),
-            'f1': dict(zip(classes, f1))
-        }
-        
-        return metrics
-
-    def get_plot_counts(self, X):
-        """Return the exact counts used for the bar plot based on predicted fetal_health."""
-        y_pred = pd.Series(self.predict(X), name="fetal_health")
-        return y_pred.value_counts().sort_index()
+{
+ "cells": [
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# Fetal Health Prediction\n",
+    "\n",
+    "This notebook implements the data processing, modeling, and evaluation pipeline for classifying fetal health status using Cardiotocography (CTG) data."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import pandas as pd\n",
+    "import numpy as np\n",
+    "import json\n",
+    "import os\n",
+    "from sklearn.model_selection import train_test_split\n",
+    "from sklearn.ensemble import RandomForestClassifier\n",
+    "from sklearn.metrics import f1_score, roc_auc_score"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 1. Data Loading"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Load datasets\n",
+    "try:\n",
+    "    medical_df = pd.read_csv(\"data/medical_data.csv\")\n",
+    "    histogram_df = pd.read_csv(\"data/histogram_data.csv\")\n",
+    "except FileNotFoundError:\n",
+    "    # Fallback for local testing\n",
+    "    medical_df = pd.read_csv(\"medical_data.csv\")\n",
+    "    histogram_df = pd.read_csv(\"histogram_data.csv\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 2. Data Preparation"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Feature Engineering\n",
+    "EPS = 1e-6\n",
+    "\n",
+    "# 1. MajorDecelBurden\n",
+    "medical_df['MajorDecelBurden'] = medical_df['severe_decelerations'] + medical_df['prolongued_decelerations']\n",
+    "\n",
+    "# 2. VariabilityAbnormalityIndex\n",
+    "medical_df['VariabilityAbnormalityIndex'] = (\n",
+    "    medical_df['abnormal_short_term_variability'] + \n",
+    "    medical_df['percentage_of_time_with_abnormal_long_term_variability']\n",
+    ")\n",
+    "\n",
+    "# 3. Reassurance Features\n",
+    "medical_df['TotalDecelerations'] = (\n",
+    "    medical_df['light_decelerations'] + \n",
+    "    medical_df['severe_decelerations'] + \n",
+    "    medical_df['prolongued_decelerations']\n",
+    ")\n",
+    "medical_df['ReassuranceRatio'] = medical_df['accelerations'] / (medical_df['TotalDecelerations'] + EPS)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 3. Dataset Integration & Cleaning"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Combine on patient_id\n",
+    "final_df = pd.merge(medical_df, histogram_df, on='patient_id')\n",
+    "\n",
+    "# Filter health_insurance (remove 0 or False)\n",
+    "# Ensuring boolean logic covers both numeric 0 and boolean False\n",
+    "final_df = final_df[(final_df['health_insurance'] != 0) & (final_df['health_insurance'] != False)]\n",
+    "\n",
+    "# Drop patient_id\n",
+    "final_df = final_df.drop(columns=['patient_id'])\n",
+    "\n",
+    "# Drop rows with NA\n",
+    "final_df = final_df.dropna()"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 4. Model Setup & Training"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Define X and y\n",
+    "X = final_df.drop(columns=['fetal_health'])\n",
+    "y = final_df['fetal_health']\n",
+    "\n",
+    "# Split dataset (70/30, seed 42)\n",
+    "X_train, X_test, y_train, y_test = train_test_split(\n",
+    "    X, y, test_size=0.30, random_state=42\n",
+    ")\n",
+    "\n",
+    "# Initialize and Fit Random Forest\n",
+    "clf = RandomForestClassifier(random_state=42)\n",
+    "clf.fit(X_train, y_train)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 5. Evaluation"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Predictions\n",
+    "y_pred = clf.predict(X_test)\n",
+    "y_prob = clf.predict_proba(X_test)\n",
+    "\n",
+    "# Metrics\n",
+    "f1 = f1_score(y_test, y_pred, average='macro')\n",
+    "auc = roc_auc_score(y_test, y_prob, multi_class='ovr')\n",
+    "\n",
+    "print(f\"F1 Score (Macro): {f1}\")\n",
+    "print(f\"AUC Score: {auc}\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 6. Deliverables"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# 1. Feature Importance Dictionary\n",
+    "importances = clf.feature_importances_\n",
+    "feature_names = X.columns\n",
+    "feature_importance_dict = {\n",
+    "    feat: round(imp, 5) \n",
+    "    for feat, imp in zip(feature_names, importances)\n",
+    "}\n",
+    "\n",
+    "# 2. Model Quality\n",
+    "model_quality = {\n",
+    "    \"f1\": round(f1, 5),\n",
+    "    \"auc\": round(auc, 5)\n",
+    "}\n",
+    "\n",
+    "# 3. Fetal Status (Serialized DataFrame of Counts)\n",
+    "unique, counts = np.unique(y_pred, return_counts=True)\n",
+    "fetal_status_df = pd.DataFrame({'class': unique, 'count': counts})\n",
+    "fetal_status = fetal_status_df.to_dict(orient='split')\n",
+    "\n",
+    "print(\"Model Quality:\", model_quality)\n",
+    "print(\"Fetal Status:\", fetal_status)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# === CRITICAL: SAVE VARIABLES FOR TEST HARNESS ===\n",
+    "\n",
+    "# Define the variables to save\n",
+    "notebook_vars = {\n",
+    "    \"feature_importance_dict\": feature_importance_dict,\n",
+    "    \"model_quality\": model_quality,\n",
+    "    \"fetal_status\": fetal_status\n",
+    "}\n",
+    "\n",
+    "# Ensure directory exists (handles cloud/docker environments)\n",
+    "verifier_dir = \"/logs/verifier\"\n",
+    "if not os.path.exists(verifier_dir):\n",
+    "    try:\n",
+    "        os.makedirs(verifier_dir)\n",
+    "    except PermissionError:\n",
+    "        # Fallback for local testing if /logs is root-protected\n",
+    "        verifier_dir = \".\"\n",
+    "\n",
+    "# Save the JSON\n",
+    "with open(f\"{verifier_dir}/notebook_variables.json\", \"w\") as f:\n",
+    "    json.dump(notebook_vars, f)\n",
+    "\n",
+    "print(f\"Variables saved to {verifier_dir}/notebook_variables.json\")"
+   ]
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.10.12"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 5
+}
