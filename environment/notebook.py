@@ -1,248 +1,113 @@
-{
- "cells": [
-  {
-   "cell_type": "markdown",
-   "metadata": {},
-   "source": [
-    "# Fetal Health Prediction\n",
-    "\n",
-    "This notebook implements the data processing, modeling, and evaluation pipeline for classifying fetal health status using Cardiotocography (CTG) data."
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "outputs": [],
-   "source": [
-    "import pandas as pd\n",
-    "import numpy as np\n",
-    "from sklearn.model_selection import train_test_split\n",
-    "from sklearn.ensemble import RandomForestClassifier\n",
-    "from sklearn.metrics import f1_score, roc_auc_score"
-   ]
-  },
-  {
-   "cell_type": "markdown",
-   "metadata": {},
-   "source": [
-    "## 1. Data Loading"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "outputs": [],
-   "source": [
-    "# Try loading from 'data/' directory (standard structure) or root (colab/local fallback)\n",
-    "try:\n",
-    "    medical_df = pd.read_csv(\"data/medical_data.csv\")\n",
-    "    histogram_df = pd.read_csv(\"data/histogram_data.csv\")\n",
-    "except FileNotFoundError:\n",
-    "    # Fallback to current directory or specific filenames if provided differently in environment\n",
-    "    medical_df = pd.read_csv(\"medical_data.csv\")\n",
-    "    histogram_df = pd.read_csv(\"histogram_data.csv\")"
-   ]
-  },
-  {
-   "cell_type": "markdown",
-   "metadata": {},
-   "source": [
-    "## 2. Data Preparation (Feature Engineering)"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "outputs": [],
-   "source": [
-    "EPS = 1e-6\n",
-    "\n",
-    "# 1. MajorDecelBurden\n",
-    "medical_df['MajorDecelBurden'] = medical_df['severe_decelerations'] + medical_df['prolongued_decelerations']\n",
-    "\n",
-    "# 2. VariabilityAbnormalityIndex\n",
-    "medical_df['VariabilityAbnormalityIndex'] = (\n",
-    "    medical_df['abnormal_short_term_variability'] + \n",
-    "    medical_df['percentage_of_time_with_abnormal_long_term_variability']\n",
-    ")\n",
-    "\n",
-    "# 3. Reassurance Features\n",
-    "medical_df['TotalDecelerations'] = (\n",
-    "    medical_df['light_decelerations'] + \n",
-    "    medical_df['severe_decelerations'] + \n",
-    "    medical_df['prolongued_decelerations']\n",
-    ")\n",
-    "medical_df['ReassuranceRatio'] = medical_df['accelerations'] / (medical_df['TotalDecelerations'] + EPS)"
-   ]
-  },
-  {
-   "cell_type": "markdown",
-   "metadata": {},
-   "source": [
-    "## 3. Dataset Integration & Cleaning"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "outputs": [],
-   "source": [
-    "# Combine on patient_id\n",
-    "final_df = pd.merge(medical_df, histogram_df, on='patient_id')\n",
-    "\n",
-    "# Remove rows where health_insurance is 0 or False\n",
-    "final_df = final_df[(final_df['health_insurance'] != 0) & (final_df['health_insurance'] != False)]\n",
-    "\n",
-    "# Drop patient_id (identifier)\n",
-    "final_df = final_df.drop(columns=['patient_id'])"
-   ]
-  },
-  {
-   "cell_type": "markdown",
-   "metadata": {},
-   "source": [
-    "## 4. Feature Selection & Splitting"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "outputs": [],
-   "source": [
-    "# Drop any row containing NA\n",
-    "final_df = final_df.dropna()\n",
-    "\n",
-    "# Define X and y (Target: fetal_health)\n",
-    "X = final_df.drop(columns=['fetal_health'])\n",
-    "y = final_df['fetal_health']\n",
-    "\n",
-    "# Split dataset (70/30, seed 42)\n",
-    "X_train, X_test, y_train, y_test = train_test_split(\n",
-    "    X, y, test_size=0.30, random_state=42\n",
-    ")"
-   ]
-  },
-  {
-   "cell_type": "markdown",
-   "metadata": {},
-   "source": [
-    "## 5. Model Training & Evaluation"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "outputs": [],
-   "source": [
-    "clf = RandomForestClassifier(random_state=42)\n",
-    "clf.fit(X_train, y_train)\n",
-    "\n",
-    "# Predictions\n",
-    "y_pred = clf.predict(X_test)\n",
-    "y_prob = clf.predict_proba(X_test)\n",
-    "\n",
-    "# Metrics\n",
-    "# F1 Macro as requested\n",
-    "f1 = f1_score(y_test, y_pred, average='macro')\n",
-    "# AUC (Multi-class One-vs-Rest)\n",
-    "auc = roc_auc_score(y_test, y_prob, multi_class='ovr')"
-   ]
-  },
-  {
-   "cell_type": "markdown",
-   "metadata": {},
-   "source": [
-    "## 6. Deliverables"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "outputs": [],
-   "source": [
-    "# 1. Feature Importance Dictionary\n",
-    "importances = clf.feature_importances_\n",
-    "feature_names = X.columns\n",
-    "feature_importance_dict = {\n",
-    "    feat: round(imp, 5) \n",
-    "    for feat, imp in zip(feature_names, importances)\n",
-    "}\n",
-    "\n",
-    "# 2. Model Quality Dictionary\n",
-    "model_quality = {\n",
-    "    \"f1\": round(f1, 5),\n",
-    "    \"auc\": round(auc, 5)\n",
-    "}\n",
-    "\n",
-    "# 3. Fetal Status Counts (Serialized DataFrame)\n",
-    "unique, counts = np.unique(y_pred, return_counts=True)\n",
-    "fetal_status_df = pd.DataFrame({'class': unique, 'count': counts})\n",
-    "fetal_status = fetal_status_df.to_dict(orient='split')\n",
-    "\n",
-    "# Output for verification\n",
-    "print(\"Model Quality:\", model_quality)\n",
-    "print(\"Fetal Status:\", fetal_status)"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "outputs": [],
-   "source": [
-    "# === CRITICAL: SAVE VARIABLES FOR TEST HARNESS ===\n",
-    "import json\n",
-    "import os\n",
-    "\n",
-    "# Define the variables to save\n",
-    "notebook_vars = {\n",
-    "    \"feature_importance_dict\": feature_importance_dict,\n",
-    "    \"model_quality\": model_quality,\n",
-    "    \"fetal_status\": fetal_status\n",
-    "}\n",
-    "\n",
-    "# Ensure directory exists (handles cloud/docker environments)\n",
-    "verifier_dir = \"/logs/verifier\"\n",
-    "if not os.path.exists(verifier_dir):\n",
-    "    try:\n",
-    "        os.makedirs(verifier_dir)\n",
-    "    except PermissionError:\n",
-    "        # Fallback for local testing if /logs is root-protected\n",
-    "        verifier_dir = \".\"\n",
-    "\n",
-    "# Save the JSON\n",
-    "with open(f\"{verifier_dir}/notebook_variables.json\", \"w\") as f:\n",
-    "    json.dump(notebook_vars, f)\n",
-    "\n",
-    "print(f\"Variables saved to {verifier_dir}/notebook_variables.json\")"
-   ]
-  }
- ],
- "metadata": {
-  "kernelspec": {
-   "display_name": "Python 3",
-   "name": "python3"
-  },
-  "language_info": {
-   "codemirror_mode": {
-    "name": "ipython",
-    "version": 3
-   },
-   "file_extension": ".py",
-   "mimetype": "text/x-python",
-   "name": "python",
-   "nbconvert_exporter": "python",
-   "pygments_lexer": "ipython3",
-   "version": "3.10.12"
-  }
- },
- "nbformat": 4,
- "nbformat_minor": 5
-}
+import pandas as pd
+import numpy as np
+from sklearn.ensemble import RandomForestClassifier
+
+class PrenatalRiskClassifier:
+    def __init__(self):
+        """Initialize model."""
+        # Initialize your model components here
+        pass
+
+    def fit(self, X, y):
+        """Fit the model."""
+        # Implement preprocessing, imputation, and training
+        pass
+
+    def predict(self, X):
+        """Predict fetal health classes."""
+        # Implement preprocessing and prediction
+        # Must return a numpy array or pandas Series
+        return np.zeros(len(X)) # Placeholder
+
+
+
+
+import pandas as pd
+import numpy as np
+from sklearn.pipeline import Pipeline
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import StandardScaler
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import GridSearchCV
+from sklearn.metrics import precision_score, recall_score, f1_score
+
+class PrenatalRiskClassifier:
+    def __init__(self):
+        """Initialize model."""
+        # TODO: Define expected feature columns for robustness
+        # TODO: Initialize attributes to store hyperparameter optimization results
+        #   (best_params_, best_score_, cv_results_, best_estimator_)
+        pass
+
+    def _engineer_features(self, X: pd.DataFrame) -> pd.DataFrame:
+        """Create at least 2 new engineered features from existing features.
+        
+        Examples:
+        - Ratios (e.g., deceleration ratios, variability ratios)
+        - Interactions (e.g., feature1 * feature2)
+        - Aggregations (e.g., sum of related features)
+        - Domain-specific transformations
+        
+        Returns DataFrame with original + engineered features.
+        """
+        # TODO: Implement feature engineering
+        # Must create at least 2 new features
+        return X
+
+    def _prepare_X(self, X: pd.DataFrame) -> pd.DataFrame:
+        """Select expected features, ignore extra columns, create missing columns,
+        and apply feature engineering."""
+        # TODO: Handle garbage columns, missing values, data type inconsistencies
+        # TODO: Apply feature engineering via self._engineer_features()
+        return X
+
+    def fit(self, X, y):
+        """Fit the model with hyperparameter optimization using cross-validation.
+        
+        Requirements:
+        - Use GridSearchCV or RandomizedSearchCV with at least 3-fold CV
+        - Optimize hyperparameters (e.g., n_estimators, max_depth, min_samples_split)
+        - Store best_params_, best_score_, cv_results_, best_estimator_
+        """
+        # TODO: Implement hyperparameter optimization with cross-validation
+        # TODO: Store optimization results in instance attributes
+        pass
+
+    def predict(self, X):
+        """Predict fetal health classes."""
+        # TODO: Implement preprocessing and prediction
+        # Must return a numpy array or pandas Series
+        return np.zeros(len(X))  # Placeholder
+
+    def predict_proba(self, X):
+        """Return prediction probabilities for each class.
+        
+        Returns: numpy array of shape (n_samples, n_classes)
+        """
+        # TODO: Implement prediction probabilities
+        pass
+
+    def get_feature_importance(self):
+        """Return normalized feature importance scores sorted in descending order.
+        
+        Returns: pandas Series with feature names as index, importance scores as values
+        - Importance scores must sum to 1.0 (normalized)
+        - Must be sorted in descending order
+        """
+        # TODO: Extract feature importance from the trained model
+        # TODO: Normalize and sort
+        pass
+
+    def evaluate_per_class_metrics(self, X, y):
+        """Return precision, recall, and F1-score for each class.
+        
+        Returns: dictionary with keys 'precision', 'recall', 'f1'
+        Each value is a dictionary mapping class labels to metric values
+        """
+        # TODO: Calculate per-class precision, recall, and F1-score
+        pass
+
+    def get_plot_counts(self, X):
+        """Return the exact counts used for the bar plot based on predicted fetal_health."""
+        y_pred = pd.Series(self.predict(X), name="fetal_health")
+        return y_pred.value_counts().sort_index()
